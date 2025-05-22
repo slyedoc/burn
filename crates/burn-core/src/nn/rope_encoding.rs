@@ -1,9 +1,9 @@
 use crate as burn;
 use crate::config::Config;
 use crate::module::{Content, DisplaySettings, Module, ModuleDisplay};
+use crate::tensor::backend::Backend;
 use crate::tensor::Int;
 use crate::tensor::Tensor;
-use crate::tensor::backend::Backend;
 use alloc::vec;
 
 #[cfg(not(feature = "std"))]
@@ -109,6 +109,7 @@ impl RotaryEncodingConfig {
             freq_complex,
             max_sequence_length: self.max_sequence_length,
             theta: self.theta,
+            cursor: 0,
         }
     }
 }
@@ -130,6 +131,8 @@ pub struct RotaryEncoding<B: Backend> {
     pub max_sequence_length: usize,
     /// Scaling factor for frequency computation.
     pub theta: f32,
+    /// An amount to add to the starting position.
+    pub cursor: usize,
 }
 
 impl<B: Backend> ModuleDisplay for RotaryEncoding<B> {
@@ -183,6 +186,7 @@ impl<B: Backend> RotaryEncoding<B> {
             D >= 2,
             "Input tensor must have at least 2 dimensions for sequence length and hidden dimension"
         );
+        let start = start + self.cursor;
 
         let device = x.device();
         let input_shape = x.shape();
@@ -211,13 +215,18 @@ impl<B: Backend> RotaryEncoding<B> {
         // Sum the real and imaginary components to get output tensor and reshape to original shape
         out.sum_dim(D - 1).reshape(input_shape)
     }
+
+    /// Shift the rotary encoding with the given offset.
+    pub fn shift(&mut self, offset: usize) {
+        self.cursor += offset;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::TestBackend;
-    use burn_tensor::{Tolerance, ops::FloatElem};
+    use burn_tensor::{ops::FloatElem, Tolerance};
     type FT = FloatElem<TestBackend>;
 
     #[test]
