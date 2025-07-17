@@ -442,7 +442,13 @@ fn execute<R: CubeRuntime, E: FloatElement, const N: usize>(
     let weight = swap_dims(weight, 0, 1); // Col-major [K, N]
 
     println!("({current}) Starting conv matmul.");
-    matmul::<R, E>(columns, weight, Some(out.clone()), Default::default())?;
+    match matmul::<R, E>(columns, weight, Some(out.clone()), Default::default()) {
+        Ok(_) => (),
+        Err(err) => {
+            println!("({current}) conv matmul error {err:?}");
+            return Err(err.into());
+        }
+    };
     println!("({current}) Execute conv done.");
 
     Ok(())

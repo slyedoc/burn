@@ -1,3 +1,4 @@
+use burn_common::id::StreamId;
 use burn_tensor::{DType, Element};
 use cubecl::{
     matmul::{
@@ -33,12 +34,16 @@ pub fn matmul_autotune<R: CubeRuntime, E: FloatElement + Element>(
     rhs: CubeTensor<R>,
     out: Option<CubeTensor<R>>,
 ) -> CubeTensor<R> {
+    let current = StreamId::current();
+    println!("({current}) Matmul autotune.");
     let output = out.unwrap_or_else(|| init_matmul_output::<R, E>(&lhs, &rhs));
+    println!("({current}) Matmul autotune output inited.");
 
     let client = lhs.client.clone();
 
     static TUNER: LocalTuner<MatmulAutotuneKey, CubeTuneId> = local_tuner!();
 
+    println!("({current}) Matmul autotune tuning initialized.");
     let tunables = TUNER.init(|| {
         const PRIORITY_MAX: u8 = 3;
         const PRIORITY_HIGH: u8 = 2;
@@ -124,6 +129,7 @@ pub fn matmul_autotune<R: CubeRuntime, E: FloatElement + Element>(
                     .group(&odd, |_| PRIORITY_MAX),
             )
     });
+    println!("({current}) Matmul autotune tuning initialized done now executing.");
 
     TUNER.execute(
         &CubeTuneId::new::<R>(&lhs.client, &lhs.device),
@@ -131,6 +137,7 @@ pub fn matmul_autotune<R: CubeRuntime, E: FloatElement + Element>(
         tunables,
         (lhs, rhs, output.clone()),
     );
+    println!("({current}) Matmul autotune tuning execution done.");
 
     output
 }
