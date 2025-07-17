@@ -1,5 +1,6 @@
 #![allow(missing_docs)]
 
+use burn_common::id::StreamId;
 use burn_tensor::ElementConversion;
 use cubecl::{
     client::ComputeClient,
@@ -32,6 +33,8 @@ pub fn autotune_reduce<
 
     static TUNER: LocalTuner<ReduceAutotuneKey, CubeTuneId> = local_tuner!("reduce-dim");
 
+    let current = StreamId::current();
+    println!("({current}) Tuner autotune reduce init");
     let tunables = TUNER.init(|| {
         TunableSet::new(create_key::<Run, Acc, Rd>, reduce_input_gen::<Run, Rd>)
             .with(Tunable::new(reduce::<Run, In, Out, Acc, Rd>))
@@ -39,6 +42,7 @@ pub fn autotune_reduce<
             .with(Tunable::new(reduce_plane::<Run, In, Out, Acc, Rd>))
             .with(Tunable::new(reduce_shared_plane::<Run, In, Out, Acc, Rd>))
     });
+    println!("({current}) Tuner autotune reduce init done, not execute");
 
     TUNER.execute(
         &CubeTuneId::new::<Run>(&input.client, &input.device),
@@ -46,6 +50,7 @@ pub fn autotune_reduce<
         tunables,
         (input, output, dim, config),
     );
+    println!("({current}) Tuner autotune reduce execute done");
 }
 
 pub(crate) fn create_key<Run: CubeRuntime, Acc: CubeElement, Rd: ReduceFamily>(
