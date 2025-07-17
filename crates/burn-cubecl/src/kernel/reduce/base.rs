@@ -1,6 +1,7 @@
 #[cfg(feature = "autotune")]
 use super::{autotune_reduce, autotune_sum};
 use crate::{CubeRuntime, element::CubeElement, ops::numeric::empty_device, tensor::CubeTensor};
+use burn_common::id::StreamId;
 use burn_tensor::{DType, Shape};
 pub use cubecl::reduce::instructions::{ArgMax, ArgMin, Mean, Prod, Sum};
 use cubecl::{
@@ -129,9 +130,13 @@ pub fn reduce<Run: CubeRuntime, In: CubeElement, Out: CubeElement, Acc: CubeElem
 ) -> Result<CubeTensor<Run>, cubecl::reduce::ReduceError> {
     // In practice, it looks like starting by the axis with the smallest shape
     // and going in increasing order lead to the fastest calculation.
+
     let sorted_axis = argsort(&tensor.shape.dims);
+    let current = StreamId::current();
     for axis in sorted_axis {
+        println!("({current}) Sum chained with reduce dim...");
         tensor = reduce_dim::<Run, In, Out, Acc>(tensor, axis, strategy, config)?;
+        println!("({current}) Sum chained with reduce dim done");
     }
     // reshape to scalar tensor
     tensor.shape = Shape::new([1]);

@@ -1,3 +1,4 @@
+use burn_common::id::StreamId;
 use burn_tensor::{
     Shape,
     ops::{ConvOptions, conv::calculate_conv_output_sizes},
@@ -268,6 +269,7 @@ pub fn conv_im2col<R: CubeRuntime, E: FloatElement, const N: usize>(
             let mut out_slice = index::<R, E>(out.clone(), run);
             out_slice.shape.dims = vec![shape_m, shape_n];
             out_slice.strides = vec![out_slice.strides[1], out_slice.strides[2]];
+            println!("Execute run {run}");
             execute::<R, E, N>(
                 input,
                 weight.clone(),
@@ -421,6 +423,9 @@ fn execute<R: CubeRuntime, E: FloatElement, const N: usize>(
     options: ConvOptions<N>,
     out_shape: &[usize],
 ) -> Result<(), ConvLaunchError> {
+    let current = StreamId::current();
+
+    println!("({current}) Executing conv ...");
     let rank = weight.shape.num_dims();
     let dim_c = rank - 1;
 
@@ -428,6 +433,7 @@ fn execute<R: CubeRuntime, E: FloatElement, const N: usize>(
     let kernel_shape = &weight.shape.dims[1..dim_c];
 
     let columns = im2col::<R, E, N>(input, options.clone(), kernel_shape, out_shape);
+    println!("({current}) Column");
 
     let [_, shape_k] = columns.shape.dims();
     let shape_n = out_channels;
@@ -435,7 +441,9 @@ fn execute<R: CubeRuntime, E: FloatElement, const N: usize>(
     let weight = reshape(weight, Shape::new([shape_n, shape_k]));
     let weight = swap_dims(weight, 0, 1); // Col-major [K, N]
 
+    println!("({current}) Starting conv matmul.");
     matmul::<R, E>(columns, weight, Some(out.clone()), Default::default())?;
+    println!("({current}) Execute conv done.");
 
     Ok(())
 }

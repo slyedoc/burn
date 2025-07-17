@@ -266,6 +266,10 @@ mod sum_ops {
     pub(crate) fn sum_chained<Run: CubeRuntime, E: CubeElement>(
         input: CubeTensor<Run>,
     ) -> Result<CubeTensor<Run>, String> {
+        use burn_common::id::StreamId;
+
+        let current = StreamId::current();
+        println!("({current}) Sum chained ...");
         crate::kernel::reduce::reduce::<Run, E, E, E>(
             input,
             crate::kernel::reduce::ReduceStrategy::Autotune,
