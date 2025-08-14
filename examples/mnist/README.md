@@ -11,6 +11,7 @@ The example can be run like so:
 ```bash
 git clone https://github.com/tracel-ai/burn.git
 cd burn
+cargo run --example mnist --release --features cuda
 # Use the --release flag to really speed up training.
 echo "Using ndarray backend"
 cargo run --example mnist --release --features ndarray                # CPU NdArray Backend - f32 - single thread
