@@ -8,11 +8,9 @@ use burn::{
     record::{CompactRecorder, NoStdTrainingRecorder},
     tensor::backend::AutodiffBackend,
     train::{
-        LearnerBuilder, MetricEarlyStoppingStrategy, StoppingCondition,
         metric::{
-            AccuracyMetric, CpuMemory, CpuTemperature, CpuUse, LossMetric,
-            store::{Aggregate, Direction, Split},
-        },
+            store::{Aggregate, Direction, Split}, AccuracyMetric, CpuMemory, CpuTemperature, CpuUse, CudaMetric, LossMetric
+        }, LearnerBuilder, LearningStrategy, MetricEarlyStoppingStrategy, StoppingCondition
     },
 };
 
@@ -65,14 +63,16 @@ pub fn run<B: AutodiffBackend>(device: B::Device) {
         .num_workers(config.num_workers)
         .build(MnistDataset::test());
 
-    // for collective ops
-    let collective =
+    // See docs/ddp.md for issue using this with tch-rs
+    let _collective =
         CollectiveConfig::default().with_local_all_reduce_strategy(AllReduceStrategy::Tree(3));
 
     // Model
     let learner = LearnerBuilder::new(ARTIFACT_DIR)
         .metric_train_numeric(AccuracyMetric::new())
-        .metric_valid_numeric(AccuracyMetric::new())
+        .metric_valid_numeric(AccuracyMetric::new())                
+        .metric_train(CudaMetric::new())
+        .metric_valid(CudaMetric::new())
         .metric_train_numeric(CpuUse::new())
         .metric_valid_numeric(CpuUse::new())
         .metric_train_numeric(CpuMemory::new())
@@ -89,7 +89,8 @@ pub fn run<B: AutodiffBackend>(device: B::Device) {
             Split::Valid,
             StoppingCondition::NoImprovementSince { n_epochs: 1 },
         ))
-        .learning_strategy(burn::train::ddp(vec![device], collective))
+        //.learning_strategy(burn::train::ddp(vec![device], collective))
+        .learning_strategy(LearningStrategy::SingleDevice(device))
         .num_epochs(config.num_epochs)
         .summary()
         .build(model, config.optimizer.init(), 1e-4);
