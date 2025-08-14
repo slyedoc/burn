@@ -6,6 +6,7 @@ use crate::{
 };
 
 use burn::{
+    collective::{AllReduceStrategy, CollectiveConfig},
     data::{
         dataloader::DataLoaderBuilder,
         dataset::{
@@ -23,12 +24,9 @@ use burn::{
     record::{CompactRecorder, NoStdTrainingRecorder},
     tensor::backend::AutodiffBackend,
     train::{
-        EvaluatorBuilder, LearnerBuilder, MetricEarlyStoppingStrategy, StoppingCondition,
         metric::{
-            AccuracyMetric, LearningRateMetric, LossMetric,
-            store::{Aggregate, Direction, Split},
-        },
-        renderer::MetricsRenderer,
+            store::{Aggregate, Direction, Split}, AccuracyMetric, CpuMemory, CpuTemperature, CpuUse, CudaMetric, LossMetric
+        }, EvaluatorBuilder, LearnerBuilder, LearningStrategy, MetricEarlyStoppingStrategy, StoppingCondition, renderer::MetricsRenderer,
     },
 };
 
@@ -92,9 +90,24 @@ pub fn run<B: AutodiffBackend>(device: B::Device) {
         .linear(LinearLrSchedulerConfig::new(1e-8, 1.0, 2000))
         .linear(LinearLrSchedulerConfig::new(1e-2, 1e-6, 10000));
 
+    // See docs/ddp.md for issue using this with tch-rs
+    let _collective =
+        CollectiveConfig::default().with_local_all_reduce_strategy(AllReduceStrategy::Tree(3));
+
+    // Model
     let learner = LearnerBuilder::new(ARTIFACT_DIR)
-        .metrics((AccuracyMetric::new(), LossMetric::new()))
-        .metric_train_numeric(LearningRateMetric::new())
+        .metric_train_numeric(AccuracyMetric::new())
+        .metric_valid_numeric(AccuracyMetric::new())
+        .metric_train(CudaMetric::new())
+        .metric_valid(CudaMetric::new())
+        .metric_train_numeric(CpuUse::new())
+        .metric_valid_numeric(CpuUse::new())
+        .metric_train_numeric(CpuMemory::new())
+        .metric_valid_numeric(CpuMemory::new())
+        .metric_train_numeric(CpuTemperature::new())
+        .metric_valid_numeric(CpuTemperature::new())
+        .metric_train_numeric(LossMetric::new())
+        .metric_valid_numeric(LossMetric::new())
         .with_file_checkpointer(CompactRecorder::new())
         .early_stopping(MetricEarlyStoppingStrategy::new(
             &LossMetric::<B>::new(),
@@ -103,9 +116,10 @@ pub fn run<B: AutodiffBackend>(device: B::Device) {
             Split::Valid,
             StoppingCondition::NoImprovementSince { n_epochs: 5 },
         ))
+        //.learning_strategy(burn::train::ddp(vec![device], collective))
+        .learning_strategy(LearningStrategy::SingleDevice(device))
         .num_epochs(config.num_epochs)
         .summary()
-        .learning_strategy(burn::train::LearningStrategy::SingleDevice(device))
         .build(model, config.optimizer.init(), lr_scheduler.init().unwrap());
 
     let result = learner.fit(dataloader_train, dataloader_valid);
