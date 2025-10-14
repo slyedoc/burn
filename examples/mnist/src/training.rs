@@ -6,7 +6,6 @@ use crate::{
 };
 
 use burn::{
-    collective::{AllReduceStrategy, CollectiveConfig},
     data::{
         dataloader::DataLoaderBuilder,
         dataset::{
@@ -29,6 +28,9 @@ use burn::{
         }, EvaluatorBuilder, LearnerBuilder, LearningStrategy, MetricEarlyStoppingStrategy, StoppingCondition, renderer::MetricsRenderer,
     },
 };
+
+#[cfg(feature = "collective")]
+use burn::collective::{AllReduceStrategy, CollectiveConfig};
 
 static ARTIFACT_DIR: &str = "/tmp/burn-example-mnist";
 
@@ -91,6 +93,7 @@ pub fn run<B: AutodiffBackend>(device: B::Device) {
         .linear(LinearLrSchedulerConfig::new(1e-2, 1e-6, 10000));
 
     // See docs/ddp.md for issue using this with tch-rs
+    #[cfg(feature = "collective")]
     let _collective =
         CollectiveConfig::default().with_local_all_reduce_strategy(AllReduceStrategy::Tree(3));
 
