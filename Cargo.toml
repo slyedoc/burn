@@ -180,9 +180,9 @@ portable-atomic = { version = "1.13.0" }
 portable-atomic-util = { version = "0.2.4", features = ["alloc"] }
 
 ### For the main burn branch. ###
-cubecl = { git = "https://github.com/slyedoc/cubecl", default-features = false }
-cubecl-common = { git = "https://github.com/slyedoc/cubecl", default-features = false }
-cubek = { git = "https://github.com/slyedoc/cubek", default-features = false, branch = "bevy-0.18" }
+cubecl = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main", default-features = false }
+cubecl-common = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main", default-features = false }
+cubek = { git = "https://github.com/slyedoc/cubek", branch = "bevy-main", default-features = false }
 ### For local development. ###
 #cubecl = { path = "../cubecl/crates/cubecl", default-features = false }
 #cubecl-common = { path = "../cubecl/crates/cubecl-common", default-features = false }
@@ -196,11 +196,11 @@ cubek = { git = "https://github.com/slyedoc/cubek", default-features = false, br
 tracel-xtask = { version = "=2.2.1" }
 
 [patch."https://github.com/tracel-ai/cubecl"]
-cubecl = { git = "https://github.com/slyedoc/cubecl" }
-cubecl-common = { git = "https://github.com/slyedoc/cubecl" }
-cubecl-core = { git = "https://github.com/slyedoc/cubecl" }
-cubecl-runtime = { git = "https://github.com/slyedoc/cubecl" }
-cubecl-wgpu = { git = "https://github.com/slyedoc/cubecl" }
+cubecl = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main" }
+cubecl-common = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main" }
+cubecl-core = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main" }
+cubecl-runtime = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main" }
+cubecl-wgpu = { git = "https://github.com/slyedoc/cubecl", branch = "bevy-main" }
 
 [profile.dev]
 debug = 1 # Speed up compilation time and not necessary.
