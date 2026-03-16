@@ -433,7 +433,29 @@ fn vector_sizes_quants<R: Runtime>(
             }
         }
         QuantStore::PackedNative(_) => {
-            panic!("Not yet supported")
+            // PackedNative E2M1: stored as u8 (e2m1x2), each byte holds 2 values
+            let mut vector_sizes = client
+                .io_optimized_vector_sizes(size_of::<u8>())
+                .collect::<Vec<_>>();
+            for val in vector_sizes.iter_mut() {
+                *val *= scheme.num_quants();
+            }
+
+            match &quants_vector_sizes {
+                Some(sizes) => {
+                    if sizes[0] < vector_sizes[0] {
+                        let mut min = *vector_sizes.last().unwrap();
+                        while min > 1 {
+                            min /= 2;
+                            vector_sizes.push(min);
+                        }
+                        *quants_vector_sizes = Some(vector_sizes);
+                    }
+                }
+                None => {
+                    *quants_vector_sizes = Some(vector_sizes);
+                }
+            }
         }
     };
 }

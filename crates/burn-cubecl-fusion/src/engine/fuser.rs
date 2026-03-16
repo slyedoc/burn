@@ -463,6 +463,15 @@ impl TraceOperationFuser {
                     return false;
                 }
 
+                // PackedNative E2M1 dequantize can't be fused — the large fusion
+                // vector sizes create intermediate types that exceed CUDA struct limits.
+                // Fall back to standalone (non-fused) dequantize which works correctly.
+                if let DType::QFloat(scheme) = &desc.input.dtype {
+                    if matches!(scheme.store, cubecl::quant::scheme::QuantStore::PackedNative(_)) {
+                        return false;
+                    }
+                }
+
                 self.fuser.fuse(|build| {
                     let qinput = build.input_quantized(&desc.input)?;
                     let out = build.output(&desc.out)?;

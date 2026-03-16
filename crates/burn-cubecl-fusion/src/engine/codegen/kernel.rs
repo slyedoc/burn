@@ -771,7 +771,7 @@ fn dequantize<C: Float, N: Size>(
         },
         QuantStore::PackedU32(_) => ElemType::UInt(UIntKind::U32).into(),
         QuantStore::PackedNative(_) => match scheme.value {
-            QuantValue::E2M1 => StorageType::Packed(ElemType::Float(FloatKind::E4M3), 2),
+            QuantValue::E2M1 => StorageType::Packed(ElemType::Float(FloatKind::E2M1), 2),
             other => panic!("{other:?} doesn't support native packing"),
         },
     }];
@@ -809,30 +809,41 @@ fn dequantize<C: Float, N: Size>(
 
     let scales =
         input_as_scales_view::<QParamType, Const<1>>(inputs, pos, tensor_pos, scheme.level, config);
-    let result = dequantize_symmetric_packed_value_at::<C, N, QParamType, QStoreType, QStoreSize>(
-        write_pos * num_quants,
-        input,
-        &scales,
-        scheme,
-    );
 
-    let vector = if comptime!(q_vector_size == 1) {
-        result[0]
+    let vector = if comptime!(matches!(scheme.store, QuantStore::PackedNative(_))) {
+        // PackedNative (e2m1x2): use dequantize_aligned which handles the
+        // packed→unpacked expansion via Vector::cast_from
+        let scale = scales[write_pos * num_quants];
+        cubecl::std::quant::dequantize_aligned::<QStoreType, QParamType, C, QStoreSize, N>(
+            input, scale, scheme,
+        )
     } else {
-        let mut vector = Vector::empty();
+        // PackedU32: use the bit-level unpack path
+        let result = dequantize_symmetric_packed_value_at::<C, N, QParamType, QStoreType, QStoreSize>(
+            write_pos * num_quants,
+            input,
+            &scales,
+            scheme,
+        );
 
-        #[unroll]
-        for i in 0..q_vector_size {
-            let value = result[i];
+        if comptime!(q_vector_size == 1) {
+            result[0]
+        } else {
+            let mut vector = Vector::empty();
 
             #[unroll]
-            for j in 0..num_quants {
-                let index = i * num_quants + j;
-                vector[index] = value[j];
-            }
-        }
+            for i in 0..q_vector_size {
+                let value = result[i];
 
-        vector
+                #[unroll]
+                for j in 0..num_quants {
+                    let index = i * num_quants + j;
+                    vector[index] = value[j];
+                }
+            }
+
+            vector
+        }
     };
 
     write::<C, N>(inputs, outputs, locals, write_pos, vector, output, config);

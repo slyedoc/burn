@@ -1,7 +1,7 @@
 use burn_backend::{
     Bytes, DType, ExecutionError, QTensorPrimitive, Shape, Slice, TensorData, TensorMetadata,
     TensorPrimitive,
-    ops::QTensorOps,
+    ops::{FloatTensorOps, QTensorOps},
     quantization::{
         QParamTensor, QuantLevel, QuantMode, QuantParam, QuantPropagation, QuantScheme, QuantValue,
         QuantizationParametersPrimitive, params_shape,
@@ -96,10 +96,21 @@ fn new_quantized<R: CubeRuntime>(
                 panic!("Can't store native sub-byte values")
             }
         },
-        QuantStore::PackedNative(_) => match scheme.value {
-            QuantValue::E2M1 => size_of::<e2m1x2>(),
-            other => panic!("{other:?} doesn't support native packing"),
-        },
+        QuantStore::PackedNative(_) => {
+            // Same as PackedU32: divide last dim by packing factor.
+            // scales_layout reconstructs the logical shape by multiplying back.
+            if !shape_last.is_multiple_of(num_quants) {
+                panic!(
+                    "Last dim (size {}) is not a multiple of packing factor {}",
+                    shape_last, num_quants
+                )
+            }
+            shape_value[rank - 1] = shape_last / num_quants;
+            match scheme.value {
+                QuantValue::E2M1 => size_of::<e2m1x2>(),
+                other => panic!("{other:?} doesn't support native packing"),
+            }
+        }
     };
 
     let scales_dtype = match scheme.param {
@@ -250,32 +261,47 @@ where
         permute(tensor, axes)
     }
 
-    fn q_flip(_tensor: QuantizedTensor<Self>, _axes: &[usize]) -> QuantizedTensor<Self> {
-        unimplemented!()
+    fn q_flip(tensor: QuantizedTensor<Self>, axes: &[usize]) -> QuantizedTensor<Self> {
+        let scheme = *tensor.scheme();
+        let float_tensor = Self::dequantize(tensor);
+        let result = Self::float_flip(float_tensor, axes);
+        Self::quantize_dynamic(result, &scheme)
     }
 
     fn q_gather(
-        _dim: usize,
-        _tensor: QuantizedTensor<Self>,
-        _indices: IntTensor<Self>,
+        dim: usize,
+        tensor: QuantizedTensor<Self>,
+        indices: IntTensor<Self>,
     ) -> QuantizedTensor<Self> {
-        unimplemented!()
+        let scheme = *tensor.scheme();
+        let float_tensor = Self::dequantize(tensor);
+        let result = Self::float_gather(dim, float_tensor, indices);
+        Self::quantize_dynamic(result, &scheme)
     }
 
     fn q_select(
-        _tensor: QuantizedTensor<Self>,
-        _dim: usize,
-        _indices: IntTensor<Self>,
+        tensor: QuantizedTensor<Self>,
+        dim: usize,
+        indices: IntTensor<Self>,
     ) -> QuantizedTensor<Self> {
-        unimplemented!()
+        let scheme = *tensor.scheme();
+        let float_tensor = Self::dequantize(tensor);
+        let result = Self::float_select(float_tensor, dim, indices);
+        Self::quantize_dynamic(result, &scheme)
     }
 
-    fn q_slice(_tensor: QuantizedTensor<Self>, _slices: &[Slice]) -> QuantizedTensor<Self> {
-        unimplemented!()
+    fn q_slice(tensor: QuantizedTensor<Self>, slices: &[Slice]) -> QuantizedTensor<Self> {
+        let scheme = *tensor.scheme();
+        let float_tensor = Self::dequantize(tensor);
+        let result = Self::float_slice(float_tensor, slices);
+        Self::quantize_dynamic(result, &scheme)
     }
 
-    fn q_expand(_tensor: QuantizedTensor<Self>, _shape: Shape) -> QuantizedTensor<Self> {
-        unimplemented!()
+    fn q_expand(tensor: QuantizedTensor<Self>, shape: Shape) -> QuantizedTensor<Self> {
+        let scheme = *tensor.scheme();
+        let float_tensor = Self::dequantize(tensor);
+        let result = Self::float_expand(float_tensor, shape);
+        Self::quantize_dynamic(result, &scheme)
     }
 
     fn q_matmul(lhs: TensorPrimitive<Self>, rhs: TensorPrimitive<Self>) -> TensorPrimitive<Self> {

@@ -137,6 +137,21 @@ pub fn matmul_autotune<R: CubeRuntime>(
             }),
         );
 
+        // Hardware scaled MMA for E2M1 (FP4) — highest priority when available
+        set = set.with(
+            Tunable::new("matmul_scaled_mma", |lhs, rhs, out| {
+                launch_matmul_naive::<R>(&Strategy::ScaledMma, lhs, rhs, out)
+                    .map_err(|err| std::format!("{err:?}"))
+            })
+            .group(&unit, |key| {
+                if key.analysis.has_scaled_mma_inputs {
+                    PRIORITY_MAX
+                } else {
+                    PRIORITY_MIN
+                }
+            }),
+        );
+
         // Unit VecMat
         for (strategy, double_buf) in [
             (
